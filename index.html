@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>わいわいトーク</title>
+<style>
+/* ===== 色・共通設定（ここを変えると全体の配色が変わります） ===== */
+:root{
+  --bg:#fff6d6; --card:#fffdf5; --ink:#4a3418; --sub:#8a6a3c;
+  --orange:#ff9a2e; --orange-d:#e07a0c; --yellow:#ffd54a; --green:#3fbf7f; --red:#ef5b5b; --blue:#4a9de8;
+  --shadow:0 6px 0 rgba(224,122,12,.28), 0 10px 18px rgba(120,80,20,.15);
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:"Hiragino Maru Gothic ProN","Yu Gothic","Meiryo",sans-serif;
+  background-image:radial-gradient(#ffe89a 2px,transparent 2px);background-size:26px 26px;min-height:100vh}
+button,select,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer;border:0;border-radius:999px;padding:.7em 1.3em;font-weight:700;background:var(--orange);color:#fff;
+  box-shadow:0 4px 0 var(--orange-d);transition:transform .08s}
+button:active{transform:translateY(3px);box-shadow:0 1px 0 var(--orange-d)}
+button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+button.sub{background:#fff;color:var(--orange-d);border:2px solid var(--orange)}
+button.green{background:var(--green);box-shadow:0 4px 0 #26995f}
+button.red{background:var(--red);box-shadow:0 4px 0 #c43f3f}
+button:disabled{opacity:.45;cursor:not-allowed}
+
+/* ===== ヘッダー（タイトルは必ず1行） ===== */
+header{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 14px;background:var(--yellow);
+  box-shadow:0 4px 0 #f2b81d}
+header h1{margin:0;white-space:nowrap;font-size:clamp(1.25rem,6vw,2.6rem);letter-spacing:.04em;min-width:0;overflow:hidden}
+#gear{padding:.5em .8em;font-size:clamp(1rem,3.5vw,1.5rem);background:#fff;color:var(--orange-d);box-shadow:0 3px 0 #f2b81d;flex:none}
+
+/* ===== レイアウト：タブレット横はカード2列、縦・スマホは1列 ===== */
+main{max-width:1100px;margin:0 auto;padding:14px;display:grid;gap:16px;grid-template-columns:1fr 1fr}
+@media (max-width:760px){main{grid-template-columns:1fr}}
+.card{background:var(--card);border-radius:24px;padding:18px;box-shadow:var(--shadow)}
+.card h2{margin:0 0 10px;font-size:1.25rem}
+.wide{grid-column:1/-1}
+
+/* ===== ガチャ ===== */
+#genreTabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+#genreTabs button{background:#fff;color:var(--orange-d);border:2px solid var(--orange);box-shadow:none;padding:.45em 1em}
+#genreTabs button.on{background:var(--orange);color:#fff}
+#stage{height:230px;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;
+  background:linear-gradient(#fff0b8,#ffe48a);border-radius:20px}
+#capsule{width:110px;height:110px;border-radius:50%;position:absolute;left:-130px;
+  background:linear-gradient(to bottom,var(--c1,#ff6b6b) 50%,#fff 50%);border:5px solid #fff;box-shadow:0 8px 0 rgba(0,0,0,.12)}
+#capsule::after{content:"";position:absolute;left:18px;top:14px;width:26px;height:14px;border-radius:50%;background:rgba(255,255,255,.7);transform:rotate(-30deg)}
+#capsule.roll{animation:roll 1.4s ease-in-out forwards}
+@keyframes roll{0%{left:-130px;transform:rotate(0)}70%{left:calc(50% - 55px);transform:rotate(720deg)}
+  80%{transform:translateY(-18px) rotate(740deg)}90%{transform:translateY(0) rotate(760deg)}100%{left:calc(50% - 55px);transform:rotate(760deg) scale(.1);opacity:0}}
+#topic{position:absolute;inset:14px;display:flex;align-items:center;justify-content:center;text-align:center;
+  background:#fff;border-radius:18px;font-size:clamp(1.3rem,4.5vw,2.2rem);font-weight:800;padding:12px;
+  border:4px dashed var(--orange);opacity:0;transform:scale(.6);transition:.35s}
+#topic.show{opacity:1;transform:scale(1)}
+#gachaBtn{margin-top:14px;width:100%;font-size:1.4rem;padding:.8em}
+
+/* ===== タイマー ===== */
+#time{font-size:clamp(3.5rem,14vw,6.5rem);font-weight:800;text-align:center;font-variant-numeric:tabular-nums;line-height:1.1}
+#time.end{color:var(--red)}
+.row{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:8px 0}
+.row button.on{background:var(--orange);color:#fff}
+
+/* ===== 録音 ===== */
+.field{display:flex;flex-direction:column;gap:4px;margin-bottom:10px}
+.field input,.field select,.field textarea{border:2px solid #f0c56a;border-radius:14px;padding:.6em .8em;background:#fff;width:100%}
+#recStatus{font-weight:700;text-align:center;min-height:1.6em}
+#recStatus.live::before{content:"●";color:var(--red);margin-right:6px;animation:blink 1s infinite}
+@keyframes blink{50%{opacity:.2}}
+audio{width:100%;margin:8px 0}
+.hint{color:var(--sub);font-size:.9rem}
+
+/* ===== モーダル・ポップアップ ===== */
+dialog{border:0;border-radius:24px;padding:0;width:min(760px,94vw);max-height:92vh;background:var(--card);color:var(--ink);box-shadow:0 20px 50px rgba(0,0,0,.35)}
+dialog::backdrop{background:rgba(74,52,24,.5)}
+.dlg{padding:18px;max-height:90vh;overflow:auto}
+.dlg h3{margin:18px 0 8px;padding-bottom:4px;border-bottom:3px solid var(--yellow)}
+.manual{background:#fff;border-radius:16px;padding:10px 14px 10px 34px;line-height:1.7}
+.manual li{margin-bottom:6px}
+.manual b{color:var(--orange-d)}
+#loading{position:fixed;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;gap:12px;
+  background:rgba(255,246,214,.9);font-size:1.4rem;font-weight:800;z-index:50}
+#loading.on{display:flex}
+.spin{width:54px;height:54px;border-radius:50%;border:8px solid var(--yellow);border-top-color:var(--orange);animation:sp 1s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+#toast{position:fixed;left:50%;top:40%;transform:translate(-50%,-50%) scale(.7);background:#fff;border:5px solid var(--green);
+  border-radius:28px;padding:24px 34px;font-size:1.6rem;font-weight:800;opacity:0;pointer-events:none;transition:.3s;z-index:60;text-align:center;max-width:90vw}
+#toast.on{opacity:1;transform:translate(-50%,-50%) scale(1)}
+#toast.err{border-color:var(--red)}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01s!important;transition-duration:.01s!important}}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🎉 わいわいトーク</h1>
+  <button id="gear" class="sub" aria-label="先生用せってい">⚙️ 先生用</button>
+</header>
+
+<main>
+  <!-- ① ガチャ -->
+  <section class="card">
+    <h2>🎯 お題ガチャ</h2>
+    <div id="genreTabs"></div>
+    <div id="stage"><div id="capsule"></div><div id="topic">ボタンをおしてね！</div></div>
+    <button id="gachaBtn">🎲 ガチャを回す！</button>
+  </section>
+
+  <!-- ② タイマー -->
+  <section class="card">
+    <h2>⏱ タイマー</h2>
+    <div id="time">02:00</div>
+    <div class="row" id="presets"></div>
+    <div class="row">
+      <button class="sub" id="m10">−10びょう</button>
+      <button class="sub" id="p10">＋10びょう</button>
+    </div>
+    <div class="row">
+      <button class="green" id="tStart">▶ スタート</button>
+      <button id="tPause" disabled>⏸ ストップ</button>
+      <button class="sub" id="tReset">↺ リセット</button>
+    </div>
+  </section>
+
+  <!-- ③ チーム名・録音 -->
+  <section class="card wide">
+    <h2>🎙 録音（やらなくてもOK）</h2>
+    <div class="field">
+      <label for="team">チーム名（れい：5年1組ペアA）</label>
+      <input id="team" maxlength="30" placeholder="チーム名をいれてね">
+    </div>
+    <div id="recStatus">まだ録音していません</div>
+    <div class="row">
+      <button class="red" id="recBtn">⏺ 録音かいし</button>
+      <button class="sub" id="retake" disabled>🔁 やり直す</button>
+      <button class="green" id="saveBtn" disabled>☁ ドライブに保存する</button>
+    </div>
+    <audio id="player" controls hidden></audio>
+    <p class="hint">録音のあと、ここで聞き直せます。録音しなくてもガチャとタイマーだけで使えます。</p>
+  </section>
+</main>
+
+<!-- ④ 先生用せってい -->
+<dialog id="dlg"><div class="dlg">
+  <div class="row" style="justify-content:space-between"><h2 style="margin:0">⚙️ 先生用せってい</h2><button class="sub" id="close">とじる</button></div>
+
+  <h3>📘 データ保存ドライブの設定のやり方（初回だけ・約3分）</h3>
+  <ol class="manual">
+    <li><b>保存先フォルダを用意する</b>：Googleドライブで音声をためるフォルダを作り、共有URLをコピーします。</li>
+    <li><b>フォルダURLを貼り付ける</b>：下の入力欄に貼ると、GASコード内のフォルダIDが自動で入れ替わります。</li>
+    <li><b>GASコードをコピーする</b>：下の【GASコードをコピー】ボタンを押します。</li>
+    <li><b>Apps Scriptに貼り付ける</b>：Google Apps Scriptで新しいプロジェクトを作り、コードを全部貼り付けて保存します。</li>
+    <li><b>デプロイして公開する</b>：「新しいデプロイ」→「ウェブアプリ」→ アクセスできるユーザーを「全員」にしてデプロイし、ウェブアプリURLを取得します。</li>
+    <li><b>URLを貼り付けて完成</b>：発行されたURLを下の「Web App URL」に貼って保存します。</li>
+  </ol>
+  <div class="field" style="margin-top:12px"><label for="folderUrl">② フォルダのURL</label>
+    <input id="folderUrl" placeholder="https://drive.google.com/drive/folders/..."></div>
+  <div class="row" style="justify-content:flex-start"><button id="copyGas">③ GASコードをコピー</button></div>
+  <textarea id="gasBox" rows="6" hidden readonly style="width:100%;border:2px solid #f0c56a;border-radius:14px;padding:.6em" aria-label="GASコード"></textarea>
+  <div class="field" style="margin-top:12px"><label for="gasUrl">⑥ Web App URL</label>
+    <input id="gasUrl" placeholder="https://script.google.com/macros/s/.../exec"></div>
+  <div class="row" style="justify-content:flex-start"><button class="green" id="saveUrl">URLを保存</button></div>
+
+  <h3>✏️ お題の編集</h3>
+  <div class="field"><label for="editGenre">ジャンル</label><select id="editGenre"></select></div>
+  <div class="row" style="justify-content:flex-start">
+    <button class="sub" id="addGenre">＋ジャンル追加</button>
+    <button class="sub" id="renGenre">名前を変える</button>
+    <button class="sub" id="delGenre">ジャンル削除</button>
+  </div>
+  <!-- ジャンル名の入力欄（prompt()が使えない環境でも動くよう画面内に表示） -->
+  <div class="row" id="nameBox" hidden style="justify-content:flex-start">
+    <input id="nameInput" maxlength="12" placeholder="ジャンル名" style="flex:1;min-width:140px;border:2px solid #f0c56a;border-radius:14px;padding:.6em .8em">
+    <button class="green" id="nameOk">決定</button>
+    <button class="sub" id="nameNg">やめる</button>
+  </div>
+  <div class="field"><label for="editTopics">お題（1行に1つ）</label><textarea id="editTopics" rows="8"></textarea></div>
+  <div class="row" style="justify-content:flex-start">
+    <button class="green" id="saveTopics">お題を保存</button>
+    <button class="red" id="resetTopics">初期状態に戻す</button>
+  </div>
+</div></dialog>
+
+<div id="loading"><div class="spin"></div>ほぞん中…</div>
+<div id="toast"></div>
+
+<script>
+/* ================= 共通ユーティリティ ================= */
+const $ = id => document.getElementById(id);
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+};
+function toast(msg, err){            // ポップアップ表示
+  const t = $('toast'); t.textContent = msg; t.className = 'on' + (err ? ' err' : '');
+  // showModal()中はdialog以外が背面に隠れるため、開いている間はdialogの中へ移動して表示する
+  const host = $('dlg').open ? $('dlg') : document.body;
+  if(t.parentNode !== host) host.appendChild(t);
+  clearTimeout(toast.id); toast.id = setTimeout(() => t.className = '', 2200);
+}
+
+/* ================= ① お題ガチャ ================= */
+// 初期お題（先生用設定で編集できます）
+const DEFAULT_TOPICS = {
+  "遊び":["好きな外遊びは？","もし1日自由なら何して遊ぶ？","雨の日にしたい遊びは？","一番得意なゲームやスポーツは？"],
+  "選択":["犬と猫、どっちが好き？その理由は？","朝ごはんはパンとごはん、どっち？","夏と冬、どっちが好き？","山と海、どっちに行きたい？"],
+  "出来事":["最近うれしかったことは？","昨日の夕ごはんは何だった？","この前の休みの日にしたことは？","最近がんばったことは？"],
+  "世の中":["もし自分が総理大臣なら何をしたい？","10年後の世界はどうなっていると思う？","みんなが笑顔になるには？","ロボットに手伝ってほしいことは？"]
+};
+let topics = store.get('wy_topics', null) || JSON.parse(JSON.stringify(DEFAULT_TOPICS));
+let genre = Object.keys(topics)[0];
+const COLORS = ['#ff6b6b','#4a9de8','#3fbf7f','#b678e8','#ff9a2e'];
+
+function renderTabs(){
+  const box = $('genreTabs'); box.innerHTML = '';
+  Object.keys(topics).forEach(g => {
+    const b = document.createElement('button');
+    b.textContent = g; b.className = g === genre ? 'on' : '';
+    b.onclick = () => { genre = g; renderTabs(); };
+    box.appendChild(b);
+  });
+}
+let rolling = false;
+$('gachaBtn').onclick = () => {
+  const list = (topics[genre] || []).filter(Boolean);
+  if(!list.length){ toast('お題がありません', true); return; }
+  if(rolling) return; rolling = true;
+  const cap = $('capsule'), card = $('topic');
+  card.classList.remove('show');
+  cap.style.setProperty('--c1', COLORS[Math.floor(Math.random()*COLORS.length)]);
+  cap.classList.remove('roll'); void cap.offsetWidth; cap.classList.add('roll');   // アニメ再生
+  beep([523,659], .12);
+  setTimeout(() => {                                 // カプセルが消えたらお題を表示
+    card.textContent = list[Math.floor(Math.random()*list.length)];
+    card.classList.add('show'); beep([784,988,1175], .12);
+    cap.classList.remove('roll'); rolling = false;
+  }, 1450);
+};
+
+/* ================= ② タイマー ================= */
+let secs = 120, base = 120, tick = null, endAt = 0;
+let audioCtx = null;
+function beep(freqs, dur){          // やさしい通知音（Web Audio API）
+  try{
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    freqs.forEach((f, i) => {
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain(), t = audioCtx.currentTime + i*dur*1.4;
+      o.type = 'sine'; o.frequency.value = f; o.connect(g); g.connect(audioCtx.destination);
+      g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(.25, t+.02); g.gain.exponentialRampToValueAtTime(.0001, t+dur*1.3);
+      o.start(t); o.stop(t+dur*1.4);
+    });
+  }catch(e){}
+}
+function showTime(){
+  const m = String(Math.floor(secs/60)).padStart(2,'0'), s = String(secs%60).padStart(2,'0');
+  $('time').textContent = m + ':' + s;
+  $('time').className = secs === 0 ? 'end' : '';
+}
+function setBase(n){ stopTick(); base = secs = Math.max(0, Math.min(5999, n)); showTime(); markPreset(); }
+function stopTick(){ clearInterval(tick); tick = null; $('tPause').disabled = true; $('tStart').disabled = false; }
+function markPreset(){ document.querySelectorAll('#presets button').forEach(b => b.classList.toggle('on', +b.dataset.s === base)); }
+[60,120,180,300].forEach(s => {
+  const b = document.createElement('button'); b.className = 'sub'; b.dataset.s = s; b.textContent = (s/60) + '分';
+  b.onclick = () => setBase(s); $('presets').appendChild(b);
+});
+$('m10').onclick = () => setBase(secs - 10);
+$('p10').onclick = () => setBase(secs + 10);
+$('tStart').onclick = () => {
+  if(secs <= 0) secs = base || 60;
+  audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();   // 操作中に音を有効化
+  endAt = Date.now() + secs*1000;
+  $('tStart').disabled = true; $('tPause').disabled = false;
+  tick = setInterval(() => {
+    secs = Math.max(0, Math.round((endAt - Date.now())/1000)); showTime();
+    if(secs === 0){ stopTick(); beep([880,698,880,1047], .2); }   // 終了アラーム
+  }, 200);
+};
+$('tPause').onclick = () => stopTick();
+$('tReset').onclick = () => { stopTick(); secs = base; showTime(); };
+showTime(); markPreset();
+
+/* ================= ③ チーム名・録音・保存 ================= */
+let rec = null, chunks = [], blob = null, stream = null, recMime = '';
+$('team').value = store.get('wy_team', '');
+$('team').oninput = e => store.set('wy_team', e.target.value);
+
+function pickMime(){                 // 端末が対応する形式を選ぶ（iPadはmp4になることも）
+  for(const m of ['audio/webm;codecs=opus','audio/webm','audio/mp4']){
+    if(window.MediaRecorder && MediaRecorder.isTypeSupported(m)) return m;
+  }
+  return '';
+}
+function setStatus(t, live){ $('recStatus').textContent = t; $('recStatus').className = live ? 'live' : ''; }
+
+$('recBtn').onclick = async () => {
+  if(rec && rec.state === 'recording'){ rec.stop(); return; }        // 停止
+  if(!window.MediaRecorder || !navigator.mediaDevices){ toast('この端末は録音に対応していません', true); return; }
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({audio:true});
+    recMime = pickMime(); chunks = [];
+    rec = new MediaRecorder(stream, recMime ? {mimeType:recMime} : undefined);
+    rec.ondataavailable = e => { if(e.data.size) chunks.push(e.data); };
+    rec.onstop = () => {
+      stream.getTracks().forEach(t => t.stop());
+      blob = new Blob(chunks, {type: rec.mimeType || recMime || 'audio/webm'});
+      $('player').src = URL.createObjectURL(blob); $('player').hidden = false;
+      $('recBtn').textContent = '⏺ 録音かいし'; $('retake').disabled = false; $('saveBtn').disabled = false;
+      setStatus('録音できたよ！聞いてみよう');
+    };
+    rec.start(); $('recBtn').textContent = '⏹ 録音ストップ';
+    $('retake').disabled = true; $('saveBtn').disabled = true; setStatus('録音中…', true);
+  }catch(e){ toast('マイクを使えません。許可してね', true); }
+};
+$('retake').onclick = () => {          // 撮り直し：録音データを破棄
+  blob = null; $('player').hidden = true; $('player').removeAttribute('src');
+  $('retake').disabled = true; $('saveBtn').disabled = true; setStatus('もう一度録音してね');
+};
+
+// Blob → Base64（先頭の "data:...;base64," を除く）
+const toBase64 = b => new Promise((ok, ng) => {
+  const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1]); r.onerror = ng; r.readAsDataURL(b);
+});
+$('saveBtn').onclick = async () => {
+  const url = store.get('wy_gas', '');
+  if(!url){ toast('先生用せっていで保存先URLをいれてね', true); return; }
+  if(!blob) return;
+  const team = ($('team').value.trim() || 'チーム名なし').replace(/[\\/:*?"<>|\s]+/g, '');
+  const d = new Date(), ymd = d.getFullYear() + String(d.getMonth()+1).padStart(2,'0') + String(d.getDate()).padStart(2,'0');
+  const ext = blob.type.includes('mp4') ? 'm4a' : 'webm';
+  const filename = `${ymd}_${team}_わいわいトーク.${ext}`;           // 例: 20261017_5年1組ペアA_わいわいトーク.webm
+  $('loading').classList.add('on');
+  try{
+    const data = await toBase64(blob);
+    // text/plain で送ると CORS の事前確認が不要になり、GASで受け取りやすい
+    const res = await fetch(url, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify({filename, mimeType: blob.type, data})});
+    const j = await res.json();
+    if(!j.ok) throw new Error(j.error || 'error');
+    toast('保存できたよ！');
+  }catch(e){ toast('保存できませんでした。URL設定を確認してね', true); }
+  $('loading').classList.remove('on');
+};
+
+/* ================= ④ 先生用設定 ================= */
+const dlg = $('dlg');
+$('gear').onclick = () => { $('gasUrl').value = store.get('wy_gas',''); $('folderUrl').value = store.get('wy_folder',''); fillGenre(); dlg.showModal(); };
+$('close').onclick = () => dlg.close();
+
+// --- GASコード（フォルダIDは __FOLDER_ID__ を差し替えて生成） ---
+const GAS_TEMPLATE = [
+"// わいわいトーク用：音声をドライブに保存するコード",
+"const FOLDER_ID = '__FOLDER_ID__';",
+"function doPost(e){",
+"  try{",
+"    const p = JSON.parse(e.postData.contents);",
+"    const blob = Utilities.newBlob(Utilities.base64Decode(p.data), p.mimeType, p.filename);",
+"    DriveApp.getFolderById(FOLDER_ID).createFile(blob);",
+"    return ContentService.createTextOutput(JSON.stringify({ok:true})).setMimeType(ContentService.MimeType.JSON);",
+"  }catch(err){",
+"    return ContentService.createTextOutput(JSON.stringify({ok:false,error:String(err)})).setMimeType(ContentService.MimeType.JSON);",
+"  }",
+"}"].join("\n");
+
+function folderId(u){               // URLからフォルダIDを取り出す
+  const m = u.match(/folders\/([-\w]+)/) || u.match(/[?&]id=([-\w]+)/);
+  return m ? m[1] : '';
+}
+$('copyGas').onclick = async () => {
+  const u = $('folderUrl').value.trim(), id = folderId(u);
+  if(!id){ toast('先にフォルダのURLを貼ってね', true); return; }
+  store.set('wy_folder', u);
+  const code = GAS_TEMPLATE.replace('__FOLDER_ID__', id);
+  try{ await navigator.clipboard.writeText(code); toast('コピーしたよ！'); }
+  catch(e){                                                          // コピー不可の端末用：画面内に表示して手動コピー
+    const b = $('gasBox'); b.value = code; b.hidden = false; b.focus(); b.select();
+    toast('下のコードを全選択してコピーしてね', true);
+  }
+};
+$('saveUrl').onclick = () => { store.set('wy_gas', $('gasUrl').value.trim()); toast('保存したよ！'); };
+
+// --- お題編集 ---
+function fillGenre(sel){
+  const s = $('editGenre'); s.innerHTML = '';
+  Object.keys(topics).forEach(g => s.add(new Option(g, g)));
+  s.value = sel && topics[sel] ? sel : Object.keys(topics)[0];
+  $('editTopics').value = (topics[s.value] || []).join('\n');
+}
+function commit(sel){ store.set('wy_topics', topics); if(!topics[genre]) genre = Object.keys(topics)[0]; renderTabs(); fillGenre(sel); }
+$('editGenre').onchange = () => $('editTopics').value = (topics[$('editGenre').value] || []).join('\n');
+$('saveTopics').onclick = () => {
+  const g = $('editGenre').value; if(!g) return;
+  topics[g] = $('editTopics').value.split('\n').map(s => s.trim()).filter(Boolean);
+  commit(g); toast('お題を保存したよ！');
+};
+// prompt()/confirm()は学校のiPad等（埋め込み・制限環境）でブロックされ「無反応」になるため、画面内の入力欄と2度押しで代用
+let nameMode = '';                                   // 'add' か 'ren'
+function openName(mode, val){ nameMode = mode; $('nameInput').value = val || ''; $('nameBox').hidden = false; $('nameInput').focus(); }
+function closeName(){ nameMode = ''; $('nameBox').hidden = true; }
+$('addGenre').onclick = () => openName('add', '');
+$('renGenre').onclick = () => openName('ren', $('editGenre').value);
+$('nameNg').onclick = closeName;
+$('nameOk').onclick = () => {
+  const n = $('nameInput').value.trim(), old = $('editGenre').value;
+  if(!n){ toast('ジャンル名をいれてね', true); return; }
+  if(nameMode === 'add'){
+    if(topics[n]){ toast('同じ名前があります', true); return; }
+    topics[n] = []; commit(n); toast('ジャンルを追加したよ！');
+  }else if(nameMode === 'ren'){
+    if(n !== old && topics[n]){ toast('同じ名前があります', true); return; }
+    const t = {}; Object.keys(topics).forEach(k => t[k === old ? n : k] = topics[k]);
+    topics = t; if(genre === old) genre = n; commit(n); toast('名前を変えたよ！');
+  }
+  closeName();
+};
+// 2度押し確認：1回目で文言が変わり、3秒以内にもう一度押すと実行
+function twoTap(btn, label, action){
+  const orig = btn.textContent;
+  btn.onclick = () => {
+    if(btn.dataset.arm){ clearTimeout(btn._t); delete btn.dataset.arm; btn.textContent = orig; action(); return; }
+    btn.dataset.arm = 1; btn.textContent = 'もう一度おすと' + label;
+    btn._t = setTimeout(() => { delete btn.dataset.arm; btn.textContent = orig; }, 3000);
+  };
+}
+twoTap($('delGenre'), '削除', () => {
+  if(Object.keys(topics).length < 2){ toast('最後のジャンルは消せません', true); return; }
+  delete topics[$('editGenre').value]; commit(); toast('ジャンルを削除したよ');
+});
+twoTap($('resetTopics'), 'もどす', () => {
+  topics = JSON.parse(JSON.stringify(DEFAULT_TOPICS)); genre = Object.keys(topics)[0]; commit(); toast('初期状態にもどしたよ');
+});
+
+renderTabs();
+</script>
+</body>
+</html>
