@@ -191,7 +191,7 @@ dialog::backdrop{background:rgba(74,52,24,.5)}
   <div class="row" style="justify-content:flex-start"><button class="sub" id="copyUrl">URLをコピー</button></div>
 </div></dialog>
 
-<div id="loading"><div class="spin"></div>ほぞん中…</div>
+<div id="loading"><div class="spin"></div><span id="loadMsg">ほぞん中…</span></div>
 <div id="toast"></div>
 
 <script>
@@ -341,20 +341,60 @@ $('saveBtn').onclick = async () => {
   if(!blob) return;
   const team = ($('team').value.trim() || 'チーム名なし').replace(/[\\/:*?"<>|\s]+/g, '');
   const d = new Date(), ymd = d.getFullYear() + String(d.getMonth()+1).padStart(2,'0') + String(d.getDate()).padStart(2,'0');
-  const ext = blob.type.includes('mp4') ? 'm4a' : 'webm';
-  const filename = `${ymd}_${team}_わいわいトーク.${ext}`;           // 例: 20261017_5年1組ペアA_わいわいトーク.webm
-  $('loading').classList.add('on');
+  $('loadMsg').textContent = 'MP3にへんかん中…'; $('loading').classList.add('on');
+  let out = blob, ext = blob.type.includes('mp4') ? 'm4a' : 'webm', mp3ok = false;
+  try{ out = await toMp3(blob); ext = 'mp3'; mp3ok = true; }       // MP3へ変換（失敗したら元の形式で保存）
+  catch(e){ console.warn('MP3変換に失敗', e); }
+  const filename = `${ymd}_${team}_わいわいトーク.${ext}`;           // 例: 20261017_5年1組ペアA_わいわいトーク.mp3
+  $('loadMsg').textContent = 'ほぞん中…';
   try{
-    const data = await toBase64(blob);
+    const data = await toBase64(out);
     // text/plain で送ると CORS の事前確認が不要になり、GASで受け取りやすい
     const res = await fetch(url, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body: JSON.stringify({filename, mimeType: blob.type, data})});
+      body: JSON.stringify({filename, mimeType: out.type, data})});
     const j = await res.json();
     if(!j.ok) throw new Error(j.error || 'error');
-    toast('保存できたよ！');
+    toast(mp3ok ? '保存できたよ！' : '保存できたよ！（MP3にできず元の形式です）');
   }catch(e){ toast('保存できませんでした。URL設定を確認してね', true); }
   $('loading').classList.remove('on');
 };
+
+/* ---- MP3変換（lamejsをCDNから読み込み。音声はモノラル64kbps＝声には十分で軽い） ---- */
+const LAME_URLS = ['https://cdnjs.cloudflare.com/ajax/libs/lamejs/1.2.1/lame.min.js',
+                   'https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js'];
+let lamePromise = null;
+function loadLame(){                                  // 1つ目で失敗したら2つ目を試す
+  if(window.lamejs) return Promise.resolve();
+  if(lamePromise) return lamePromise;
+  lamePromise = LAME_URLS.reduce((p, u) => p.catch(() => new Promise((ok, ng) => {
+    const el = document.createElement('script'); el.src = u; el.onload = ok; el.onerror = () => { el.remove(); ng(new Error('load')); };
+    document.head.appendChild(el);
+  })), Promise.reject()).then(() => { if(!window.lamejs) throw new Error('nolame'); }, e => { lamePromise = null; throw e; });
+  return lamePromise;
+}
+loadLame().catch(() => {});                           // 起動時に先読み（失敗しても保存時に再挑戦）
+
+async function toMp3(src){
+  await loadLame();
+  const Ctx = window.AudioContext || window.webkitAudioContext, ctx = new Ctx();
+  const ab = await src.arrayBuffer();
+  const buf = await new Promise((ok, ng) => ctx.decodeAudioData(ab, ok, ng));   // 録音→波形データ
+  ctx.close && ctx.close();
+  // 複数チャンネルは平均してモノラルに、Float32 → Int16へ
+  const n = buf.length, pcm = new Int16Array(n), chs = [];
+  for(let c = 0; c < buf.numberOfChannels; c++) chs.push(buf.getChannelData(c));
+  for(let i = 0; i < n; i++){
+    let v = 0; for(const ch of chs) v += ch[i]; v /= chs.length;
+    pcm[i] = Math.max(-1, Math.min(1, v)) * 0x7FFF;
+  }
+  const enc = new lamejs.Mp3Encoder(1, buf.sampleRate, 64), parts = [], N = 1152;
+  for(let i = 0; i < n; i += N){
+    const d = enc.encodeBuffer(pcm.subarray(i, i + N)); if(d.length) parts.push(new Uint8Array(d));
+    if((i / N) % 400 === 0) await new Promise(r => setTimeout(r));   // 長い録音でも画面が固まらないよう一息入れる
+  }
+  const end = enc.flush(); if(end.length) parts.push(new Uint8Array(end));
+  return new Blob(parts, {type:'audio/mpeg'});
+}
 
 /* ================= ④ 先生用設定 ================= */
 const dlg = $('dlg');
