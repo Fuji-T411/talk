@@ -359,7 +359,7 @@ $('saveBtn').onclick = async () => {
   $('loading').classList.remove('on');
 };
 
-/* ---- MP3変換（lamejsをCDNから読み込み。音声はモノラル64kbps＝声には十分で軽い） ---- */
+/* ---- MP3変換（lamejsをCDNから読み込み。音声は44.1kHz・モノラル128kbps） ---- */
 const LAME_URLS = ['https://cdnjs.cloudflare.com/ajax/libs/lamejs/1.2.1/lame.min.js',
                    'https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js'];
 let lamePromise = null;
@@ -380,14 +380,16 @@ async function toMp3(src){
   const ab = await src.arrayBuffer();
   const buf = await new Promise((ok, ng) => ctx.decodeAudioData(ab, ok, ng));   // 録音→波形データ
   ctx.close && ctx.close();
-  // 複数チャンネルは平均してモノラルに、Float32 → Int16へ
-  const n = buf.length, pcm = new Int16Array(n), chs = [];
-  for(let c = 0; c < buf.numberOfChannels; c++) chs.push(buf.getChannelData(c));
-  for(let i = 0; i < n; i++){
-    let v = 0; for(const ch of chs) v += ch[i]; v /= chs.length;
-    pcm[i] = Math.max(-1, Math.min(1, v)) * 0x7FFF;
-  }
-  const enc = new lamejs.Mp3Encoder(1, buf.sampleRate, 64), parts = [], N = 1152;
+  // 互換性のため、標準的な44.1kHz・モノラルに変換（OfflineAudioContextで再サンプリング。複数チャンネルは自動でモノラルに混合）
+  const RATE = 44100;
+  const off = new OfflineAudioContext(1, Math.max(1, Math.ceil(buf.duration * RATE)), RATE);
+  const node = off.createBufferSource(); node.buffer = buf; node.connect(off.destination); node.start();
+  const mono = (await new Promise((ok, ng) => {
+    const r = off.startRendering(); if(r && r.then) r.then(ok, ng); else off.oncomplete = e => ok(e.renderedBuffer);
+  })).getChannelData(0);
+  const n = mono.length, pcm = new Int16Array(n);                    // Float32 → Int16
+  for(let i = 0; i < n; i++) pcm[i] = Math.max(-1, Math.min(1, mono[i])) * 0x7FFF;
+  const enc = new lamejs.Mp3Encoder(1, RATE, 128), parts = [], N = 1152;   // 128kbpsの一般的な設定
   for(let i = 0; i < n; i += N){
     const d = enc.encodeBuffer(pcm.subarray(i, i + N)); if(d.length) parts.push(new Uint8Array(d));
     if((i / N) % 400 === 0) await new Promise(r => setTimeout(r));   // 長い録音でも画面が固まらないよう一息入れる
